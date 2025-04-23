@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MCU ChronoLog</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend&display=swap" rel="stylesheet" />
+    <style>
+        /* --- Base Styles & Smooth Scroll --- */
+        /* Enables smooth scrolling when navigating to section IDs */
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Lexend', sans-serif; /* Apply Lexend font */
+            background-color: #0d0d0d; /* Very dark background */
+            color: white; /* Default text color */
+            margin: 0;
+            padding: 0;
+            display: flex;
+            min-height: 100vh; /* Ensure body takes at least full viewport height */
+            flex-direction: column; /* Stack children vertically */
+        }
+
+        /* --- Animations & Effects --- */
+        /* Multiverse text gradient animation */
+        .multiverse-text {
+            /* Gradient colors */
+            background: linear-gradient(to right, white, red, yellow, green, blue);
+            background-size: 500% auto; /* Make gradient wider than text for animation */
+            -webkit-background-clip: text; /* Clip background to text shape */
+            -webkit-text-fill-color: transparent; /* Make text color transparent to show gradient */
+            animation: colorSweepLetter 15s ease-in-out infinite; /* Apply animation */
+            display: inline-block; /* Required for background-clip */
+        }
+        /* Keyframes for the color sweep animation */
+        @keyframes colorSweepLetter {
+            0% { background-position: 500% 0; } /* Start gradient off-screen right */
+            100% { background-position: -500% 0; } /* Move gradient off-screen left */
+        }
+
+        /* Worm line animation below "ChronoLog" in About section */
+        .worm-line {
+            position: absolute;
+            bottom: -6px; /* Position below the text */
+            left: 0;
+            width: 100%;
+            height: 14px;
+            overflow: hidden; /* Hide parts of the SVG outside this container */
+            /* Mask to fade edges of the worm line */
+            mask-image: linear-gradient(to right, transparent, black 20%, black 80%, transparent);
+            -webkit-mask-image: linear-gradient(to right, transparent, black 20%, black 80%, transparent);
+        }
+        .worm-container {
+            position: absolute;
+            width: 200%; /* Make container wider than mask for scrolling effect */
+            height: 100%;
+            display: flex; /* Arrange SVGs side-by-side */
+            animation: wormScroll 8s ease-in-out infinite; /* Apply horizontal scroll animation */
+        }
+        /* Keyframes for horizontal scrolling of the worm line */
+        @keyframes wormScroll {
+            0%, 100% { transform: translateX(0%); } /* Start and end at original position */
+            50% { transform: translateX(-50%); } /* Move halfway across */
+        }
+        /* Styling for the SVG path within the worm line */
+        .wiggle path {
+            animation: wigglePath 2s ease-in-out infinite; /* Apply path animation */
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        /* Keyframes for the wiggling effect of the SVG path */
+        @keyframes wigglePath {
+            /* Define the path shape at different points in the animation */
+            0%, 100% { d: path("M0,6 Q10,0 20,6 T40,6 T60,6 T80,6 T100,6 T120,6 T140,6 T160,6 T180,6 T200,6"); }
+            50% { d: path("M0,6 Q10,12 20,6 T40,6 T60,6 T80,6 T100,6 T120,6 T140,6 T160,6 T180,6 T200,6"); }
+        }
+
+        /* --- Layout Sections --- */
+        /* Landing section styles */
+        #landing {
+            min-height: 100vh; /* Full viewport height */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center; /* Center content vertically */
+            text-align: center;
+            padding: 40px 20px;
+            position: relative; /* For absolute positioning of observer target */
+        }
+        /* About section styles */
+        #about {
+            padding: 40px 20px;
+            text-align: center;
+            margin-top: 40px; /* Space above About section */
+        }
+
+        /* Tracker section - initially hidden, controlled by JS */
+        .tracker-section {
+            display: none; /* Start hidden */
+            flex-direction: column; /* Always stack vertically */
+            padding: 20px;
+            gap: 20px; /* Space between controls area and list area */
+            align-items: stretch; /* Stretch children */
+            max-width: 1200px; /* Max width for content */
+            margin: 40px auto 0 auto; /* Margin top and center horizontally */
+            width: 100%;
+            box-sizing: border-box; /* Include padding in element's total width/height */
+            opacity: 0; /* Start faded out */
+            transition: opacity 0.5s ease-in-out; /* Fade-in transition */
+        }
+        /* Class added by JS to show the tracker */
+        .tracker-section.visible {
+             display: flex; /* Use flex when visible */
+             opacity: 1; /* Fade in */
+        }
+
+        /* Container for Controls + Progress */
+        .main-content {
+             display: flex;
+             flex-direction: column; /* Stack controls and progress vertically */
+             gap: 20px; /* Space between controls and progress */
+             width: 100%; /* Take full width */
+        }
+
+        /* --- Controls Area (Search, Filters, Sort) --- */
+        /* Base styles - layout handled by Tailwind classes in HTML */
+        .controls {
+             /* padding: 15px; -> Replaced by p-4 in HTML */
+             background: #121212; /* Dark background for controls */
+             border-radius: 8px; /* Tailwind class rounded-lg used in HTML */
+           }
+        /* Search bar styles */
+        .search-bar { flex-grow: 1; min-width: 200px; } /* Allow growing */
+        .search-bar input {
+             width: 100%; /* Full width within its container */
+             padding: 10px 15px;
+             border-radius: 5px;
+             background: #222; /* Darker input background */
+             color: white; /* Input text color */
+             border: 1px solid #555; /* Input border color */
+             font-size: 1em;
+        }
+        .search-bar input::placeholder { color: #888; } /* Placeholder text color */
+        /* Filter button styles */
+        .filter-buttons { display: flex; flex-wrap: wrap; gap: 8px; } /* Arrange buttons with spacing */
+        .filter-buttons button {
+            margin: 0; /* Reset default margin */
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            background: #333; /* Default button background */
+            color: white; /* Button text color */
+            cursor: pointer; /* Indicate clickable */
+            transition: background-color 0.2s ease; /* Smooth hover effect */
+            font-size: 0.9em;
+        }
+        .filter-buttons button:hover { background: #444; } /* Darker background on hover */
+        .filter-buttons .active { background: red; } /* Active filter button color */
+        .filter-buttons .active:hover { background: darkred; } /* Darker red on hover for active */
+        /* Sort dropdown styles */
+        .sort-select { display: flex; align-items: center; gap: 5px; } /* Arrange label and select with spacing */
+        .sort-select label { font-size: 0.9em; color: #ccc; } /* Label text style */
+        .sort-select select {
+            padding: 8px 10px;
+            border-radius: 5px;
+            background: #222; /* Darker select background */
+            color: white; /* Select text color */
+            border: 1px solid #555; /* Select border color */
+            cursor: pointer; /* Indicate clickable */
+            font-size: 0.9em;
+        }
+
+        /* --- Progress Area --- */
+        .progress-area {
+            display: flex;
+            align-items: center;
+            gap: 15px; /* Space between progress bar and count */
+            background: #121212; /* Dark background */
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .progress-container {
+            flex-grow: 1; /* Take available space */
+            height: 10px;
+            background: #333; /* Track background */
+            border-radius: 5px;
+            overflow: hidden; /* Clip the progress bar */
+        }
+        /* The progress bar itself - Red gradient */
+        .progress {
+            height: 100%;
+            /* Red-500 (#ef4444) to Red-700 (#b91c1c) gradient */
+            background: linear-gradient(to right, #ef4444, #b91c1c);
+            width: 0; /* Initial width, updated by JS */
+            border-radius: 5px;
+            /* Optional: Adjusted box-shadow color */
+            box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+            transition: width 0.5s ease-out; /* Smooth width transition */
+        }
+        /* Progress count text */
+        #progressCount {
+            font-size: 0.9em;
+            color: #ccc;
+            white-space: nowrap; /* Prevent wrapping */
+            flex-shrink: 0; /* Don't shrink */
+        }
+
+        /* --- Movie List & Custom Scrollbar --- */
+        .movie-list-container {
+            background: #1a1a1a; /* Slightly lighter dark background */
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto; /* Enable vertical scroll */
+            max-height: 60vh; /* Limit height, adjust as needed */
+            width: 100%; /* Full width */
+            box-sizing: border-box; /* Include padding in element's total width/height */
+            flex-shrink: 0; /* Prevent shrinking in flex layout */
+            /* --- Custom Scrollbar (Firefox) --- */
+            scrollbar-width: thin;
+            scrollbar-color: #16a34a #222; /* Green thumb, dark track */
+        }
+        /* --- Custom Scrollbar (WebKit - Chrome, Safari, Edge) --- */
+        .movie-list-container::-webkit-scrollbar { width: 8px; }
+        .movie-list-container::-webkit-scrollbar-track { background: #222; border-radius: 4px; }
+        .movie-list-container::-webkit-scrollbar-thumb { background-color: #16a34a; border-radius: 4px; }
+        .movie-list-container::-webkit-scrollbar-thumb:hover { background-color: #22c55e; } /* Lighter green on hover */
+
+        /* Container for individual movie items */
+        .movie-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* Space between items */
+            padding-right: 5px; /* Space for scrollbar */
+        }
+        /* Individual movie item styling */
+        .movie-item {
+            background: #1f1f1f; /* Dark item background */
+            padding: 12px 15px;
+            border-radius: 6px;
+            border-left: 4px solid red; /* Accent border */
+            display: flex;
+            flex-wrap: wrap; /* Allow wrapping on small screens if needed */
+            align-items: center;
+            gap: 10px; /* Space between info and checkbox */
+            transition: background-color 0.2s ease;
+        }
+        .movie-item:hover { background-color: #2a2a2a; } /* Hover effect */
+
+        /* Movie title, date, type container */
+        .movie-item-info {
+            flex-grow: 1; /* Take available space */
+            min-width: 150px; /* Minimum width before wrapping */
+            flex-shrink: 1;
+        }
+        .movie-item h3 { margin: 0 0 2px 0; font-size: 1em; line-height: 1.3; }
+        .movie-item p { margin: 0; color: #aaa; font-size: 0.8em; line-height: 1.4; }
+        .movie-item p.type { font-style: italic; font-size: 0.75em; }
+
+        /* --- Checkbox Styling --- */
+        .checkbox {
+            flex-shrink: 0; /* Prevent checkbox from shrinking */
+            padding: 5px;
+            margin-left: auto; /* Push checkbox to the right */
+        }
+        .checkbox input[type="checkbox"] {
+            appearance: none; /* Remove default appearance */
+            position: relative; /* For positioning the pseudo-element */
+            width: 24px;
+            height: 24px;
+            border: 2px solid white;
+            border-radius: 4px;
+            background: none;
+            cursor: pointer;
+            vertical-align: middle;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+            display: inline-block;
+        }
+        /* Checked state */
+        .checkbox input[type="checkbox"]:checked {
+            background: #16a34a; /* Green background */
+            border-color: #15803d; /* Darker green border */
+        }
+        /* Hover states */
+        .checkbox input[type="checkbox"]:hover { border-color: #ccc; }
+        .checkbox input[type="checkbox"]:checked:hover {
+             background-color: #22c55e; /* Lighter green */
+             border-color: #16a34a;
+        }
+        /* Custom checkmark using ::after pseudo-element */
+        .checkbox input[type="checkbox"]:checked::after {
+            content: '';
+            display: block;
+            position: absolute;
+            top: 3px; left: 8px; /* Position inside the box */
+            width: 6px; height: 12px; /* Checkmark dimensions */
+            border: solid white;
+            border-width: 0 3px 3px 0; /* Create L-shape */
+            transform: rotate(45deg); /* Rotate to form checkmark */
+        }
+
+        /* Highlight search matches */
+        .highlight {
+             background-color: yellow;
+             color: black;
+             font-weight: bold;
+             border-radius: 2px; /* Slight rounding */
+             padding: 0 2px; /* Small padding */
+           }
+
+    </style>
+</head>
+<body class="bg-black text-white">
+
+    <section id="landing" class="min-h-screen flex flex-col justify-center items-center text-center px-5">
+        <h1 class="text-4xl md:text-6xl font-bold mb-4">MCU ChronoLog</h1>
+
+        <h2 class="text-3xl md:text-5xl font-bold mb-4">
+            Never Lose Your Place in the <span class="multiverse-text">Multiverse</span>.
+        </h2>
+        <p class="text-lg md:text-xl max-w-2xl mb-12">
+            Track all MCU titles — movies, series, and specials — with an easy checklist and release tracker. Search, filter, and sort your way through the timeline!
+        </p>
+        <button id="startTrackingBtn" class="relative px-6 py-3 bg-red-600 text-white font-bold rounded-full overflow-hidden shadow-lg hover:scale-105 transition transform duration-300">
+            Start Tracking
+        </button>
+        <div id="landing-observer-target" style="position: absolute; bottom: 0; height: 1px; width: 1px;"></div>
+    </section>
+
+    <section id="tracker" class="tracker-section">
+        <div class="main-content">
+            <div class="controls flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 p-4 bg-[#121212] rounded-lg">
+                <div class="search-bar w-full sm:w-auto">
+                    <input type="search" id="search" placeholder="Search titles..." oninput="handleSearch()">
+                </div>
+                <div class="filter-buttons">
+                    <button onclick="filterType('all')" class="active">All</button>
+                    <button onclick="filterType('movie')">Movies</button>
+                    <button onclick="filterType('series')">Series</button>
+                    <button onclick="filterType('special')">Specials</button>
+                </div>
+                <div class="sort-select mt-2 sm:mt-0 sm:ml-auto">
+                    <label for="sort">Sort by:</label>
+                    <select id="sort" onchange="sortItems()">
+                        <option value="release-asc">Release Date (Asc)</option>
+                        <option value="release-desc">Release Date (Desc)</option>
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="progress-area">
+                <div class="progress-container">
+                    <div id="progress" class="progress"></div>
+                </div>
+                <span id="progressCount">Watched: 0 / 0</span>
+            </div>
+        </div>
+
+        <div class="movie-list-container">
+            <div id="movieList" class="movie-list">
+            </div>
+        </div>
+    </section>
+
+    <section id="about" class="px-6 py-12 text-center">
+         <h2 class="text-3xl font-semibold mb-1">About</h2>
+         <div class="text-3xl font-semibold mb-4 relative inline-block">
+             MCU <span class="relative inline-block">
+                 <span class="relative z-10">ChronoLog</span>
+                 <div class="worm-line">
+                     <div class="worm-container">
+                         <svg class="worm-path wiggle" viewBox="0 0 200 12" preserveAspectRatio="none"><path fill="none" stroke="red" stroke-width="2.5" d="M0,6 Q10,0 20,6 T40,6 T60,6 T80,6 T100,6 T120,6 T140,6 T160,6 T180,6 T200,6" /></svg>
+                         <svg class="worm-path wiggle" viewBox="0 0 200 12" preserveAspectRatio="none"><path fill="none" stroke="red" stroke-width="2.5" d="M0,6 Q10,0 20,6 T40,6 T60,6 T80,6 T100,6 T120,6 T140,6 T160,6 T180,6 T200,6" /></svg>
+                     </div>
+                 </div>
+             </span>
+         </div>
+         <p class="max-w-2xl mx-auto text-lg">
+             Easily track watched MCU titles, view release dates, search, filter by type, and stay updated. Your progress is saved in your browser.
+             <br><br>
+             Your ultimate Marvel Cinematic Universe watchlist awaits.
+         </p>
+     </section>
+
+
+    <script>
+        // --- MCU Data ---
+        // Includes movies, series, and specials with release dates and types.
+        // Watched status is initialized to false and loaded from localStorage.
+        // Dates are approximate for future/TBA entries and should be updated periodically.
+        const mcuTitles = [
+            // Phase 1
+            { name: "Iron Man", date: "May 2, 2008", type: "movie", watched: false },
+            { name: "The Incredible Hulk", date: "June 13, 2008", type: "movie", watched: false },
+            { name: "Iron Man 2", date: "May 7, 2010", type: "movie", watched: false },
+            { name: "Thor", date: "May 6, 2011", type: "movie", watched: false },
+            { name: "Captain America: The First Avenger", date: "July 22, 2011", type: "movie", watched: false },
+            { name: "The Avengers", date: "May 4, 2012", type: "movie", watched: false },
+            // Phase 2
+            { name: "Iron Man 3", date: "May 3, 2013", type: "movie", watched: false },
+            { name: "Thor: The Dark World", date: "November 8, 2013", type: "movie", watched: false },
+            { name: "Captain America: The Winter Soldier", date: "April 4, 2014", type: "movie", watched: false },
+            { name: "Guardians of the Galaxy", date: "August 1, 2014", type: "movie", watched: false },
+            { name: "Avengers: Age of Ultron", date: "May 1, 2015", type: "movie", watched: false },
+            { name: "Ant-Man", date: "July 17, 2015", type: "movie", watched: false },
+            // Phase 3
+            { name: "Captain America: Civil War", date: "May 6, 2016", type: "movie", watched: false },
+            { name: "Doctor Strange", date: "November 4, 2016", type: "movie", watched: false },
+            { name: "Guardians of the Galaxy Vol. 2", date: "May 5, 2017", type: "movie", watched: false },
+            { name: "Spider-Man: Homecoming", date: "July 7, 2017", type: "movie", watched: false },
+            { name: "Thor: Ragnarok", date: "November 3, 2017", type: "movie", watched: false },
+            { name: "Black Panther", date: "February 16, 2018", type: "movie", watched: false },
+            { name: "Avengers: Infinity War", date: "April 27, 2018", type: "movie", watched: false },
+            { name: "Ant-Man and the Wasp", date: "July 6, 2018", type: "movie", watched: false },
+            { name: "Captain Marvel", date: "March 8, 2019", type: "movie", watched: false },
+            { name: "Avengers: Endgame", date: "April 26, 2019", type: "movie", watched: false },
+            { name: "Spider-Man: Far From Home", date: "July 2, 2019", type: "movie", watched: false },
+            // Phase 4
+            { name: "WandaVision (Season 1)", date: "January 15, 2021", type: "series", watched: false },
+            { name: "The Falcon and the Winter Soldier (Season 1)", date: "March 19, 2021", type: "series", watched: false },
+            { name: "Loki (Season 1)", date: "June 9, 2021", type: "series", watched: false },
+            { name: "Black Widow", date: "July 9, 2021", type: "movie", watched: false },
+            { name: "Shang-Chi and the Legend of the Ten Rings", date: "September 3, 2021", type: "movie", watched: false },
+            { name: "Eternals", date: "November 5, 2021", type: "movie", watched: false },
+            { name: "Hawkeye (Season 1)", date: "November 24, 2021", type: "series", watched: false },
+            { name: "Spider-Man: No Way Home", date: "December 17, 2021", type: "movie", watched: false },
+            { name: "Moon Knight (Season 1)", date: "March 30, 2022", type: "series", watched: false },
+            { name: "Doctor Strange in the Multiverse of Madness", date: "May 6, 2022", type: "movie", watched: false },
+            { name: "Ms. Marvel (Season 1)", date: "June 8, 2022", type: "series", watched: false },
+            { name: "Thor: Love and Thunder", date: "July 8, 2022", type: "movie", watched: false },
+            { name: "She-Hulk: Attorney at Law (Season 1)", date: "August 18, 2022", type: "series", watched: false },
+            { name: "Werewolf by Night", date: "October 7, 2022", type: "special", watched: false },
+            { name: "Black Panther: Wakanda Forever", date: "November 11, 2022", type: "movie", watched: false },
+            { name: "The Guardians of the Galaxy Holiday Special", date: "November 25, 2022", type: "special", watched: false },
+            // Phase 5
+            { name: "Ant-Man and the Wasp: Quantumania", date: "February 17, 2023", type: "movie", watched: false },
+            { name: "Guardians of the Galaxy Vol. 3", date: "May 5, 2023", type: "movie", watched: false },
+            { name: "Secret Invasion (Season 1)", date: "June 21, 2023", type: "series", watched: false },
+            { name: "Loki (Season 2)", date: "October 5, 2023", type: "series", watched: false },
+            { name: "The Marvels", date: "November 10, 2023", type: "movie", watched: false },
+            { name: "Echo (Season 1)", date: "January 9, 2024", type: "series", watched: false },
+             // Phase 5/6 Upcoming & Tentative (Dates as of April 2025 knowledge)
+            { name: "Deadpool & Wolverine", date: "July 26, 2024", type: "movie", watched: false }, // Past release, but keep for chronology
+            { name: "Agatha All Along", date: "September 18, 2024", type: "series", watched: false }, // Past release
+            { name: "Your Friendly Neighborhood Spider-Man (Season 1)", date: "Late 2024/Early 2025", type: "series", watched: false }, // Animation, updated timeframe
+            { name: "Eyes of Wakanda", date: "2025", type: "series", watched: false }, // Animation, updated timeframe
+            { name: "Captain America: Brave New World", date: "February 14, 2025", type: "movie", watched: false }, // Past release
+            { name: "Daredevil: Born Again (Season 1)", date: "March 2025", type: "series", watched: false }, // Past release
+            { name: "Thunderbolts*", date: "May 2, 2025", type: "movie", watched: false }, // Asterisk notes title change
+            { name: "The Fantastic Four", date: "July 25, 2025", type: "movie", watched: false },
+            { name: "Blade", date: "November 7, 2025", type: "movie", watched: false },
+            { name: "Ironheart (Season 1)", date: "Late 2025", type: "series", watched: false }, // Tentative timeframe
+            { name: "Wonder Man (Season 1)", date: "TBA", type: "series", watched: false },
+            { name: "Marvel Zombies", date: "TBA", type: "series", watched: false }, // Animation
+            { name: "Spider-Man: Sophomore Year", date: "TBA", type: "series", watched: false }, // Animation
+             // Phase 6
+            { name: "Avengers 5", date: "May 1, 2026", type: "movie", watched: false }, // Title likely changing
+            { name: "Avengers: Secret Wars", date: "May 7, 2027", type: "movie", watched: false },
+             // Future / Other Potential Projects
+            { name: "Armor Wars", date: "TBA", type: "movie", watched: false }, // Was series, now movie
+            { name: "Shang-Chi 2", date: "TBA", type: "movie", watched: false },
+            { name: "Nova", date: "TBA", type: "special", watched: false }, // Format (special/series) TBD
+            { name: "Vision Quest", date: "TBA", type: "series", watched: false }
+        ];
+
+        // --- Global State Variables ---
+        let currentFilter = 'all'; // Active filter ('all', 'movie', 'series', 'special')
+        let currentSearchTerm = ''; // Current search input value
+        const localStorageKey = 'mcuWatchedTitles'; // Key for saving watched status
+        let isTrackerVisible = false; // Flag to track if the tracker section has been made visible
+
+        // --- Utility Functions ---
+
+        /**
+         * Capitalizes the first letter of a string.
+         * @param {string} word - The string to capitalize.
+         * @returns {string} The capitalized string.
+         */
+        function capitalize(word) {
+            if (!word) return '';
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        }
+
+        /**
+         * Parses various date string formats into Date objects for sorting.
+         * Handles 'TBA', 'Month Year', 'Late/Early Year', 'YYYY', and standard 'Month Day, Year'.
+         * Assigns future/invalid dates far in the future for sorting purposes.
+         * @param {string} dateStr - The date string to parse.
+         * @returns {Date} A Date object representing the parsed date.
+         */
+        function parseDate(dateStr) {
+            // Handle TBA or empty strings
+            if (!dateStr || dateStr.toLowerCase() === 'tba') {
+                return new Date('9999-12-31'); // Far future date for TBA
+            }
+            // Try standard parsing first
+            let date = new Date(dateStr);
+            if (!isNaN(date.getTime())) {
+                return date;
+            }
+            // Handle "Late YYYY" or "Early YYYY"
+            let match = dateStr.match(/(Late|Early)\s*(\d{4})/i);
+            if (match) {
+                const year = parseInt(match[2]);
+                const month = match[1].toLowerCase() === 'late' ? 11 : 0; // Dec for Late, Jan for Early
+                return new Date(year, month, match[1].toLowerCase() === 'late' ? 31 : 1);
+            }
+            // Handle "Month YYYY" (e.g., "March 2025")
+             match = dateStr.match(/([a-zA-Z]+)\s*(\d{4})/i);
+             if(match) {
+                 try {
+                     // Attempt to create a date like "March 1, 2025"
+                     date = new Date(`${match[1]} 1, ${match[2]}`);
+                     if (!isNaN(date.getTime())) return date;
+                 } catch(e){ /* Ignore parsing errors here */ }
+             }
+            // Handle "YYYY" only
+            match = dateStr.match(/^(\d{4})$/);
+            if(match) {
+                return new Date(parseInt(match[1]), 0, 1); // January 1st of that year
+            }
+            // Fallback for unparseable dates (assign slightly less future date than TBA)
+            return new Date('9998-12-31');
+        }
+
+        /**
+         * Escapes special characters in a string for use in a regular expression.
+         * @param {string} string - The string to escape.
+         * @returns {string} The escaped string.
+         */
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+        }
+
+        // --- Local Storage Functions ---
+
+        /**
+         * Loads the watched status of titles from localStorage.
+         * Updates the `watched` property in the `mcuTitles` array.
+         */
+        function loadWatchedStatus() {
+            try {
+                const watchedJson = localStorage.getItem(localStorageKey);
+                if (watchedJson) {
+                    const watchedNames = JSON.parse(watchedJson);
+                    const watchedSet = new Set(watchedNames); // Use Set for efficient lookup
+                    mcuTitles.forEach(title => {
+                        title.watched = watchedSet.has(title.name);
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to load watched status from localStorage:", e);
+            }
+        }
+
+        /**
+         * Saves the names of watched titles to localStorage.
+         */
+        function saveWatchedStatus() {
+            try {
+                const watchedNames = mcuTitles
+                    .filter(t => t.watched) // Get only watched titles
+                    .map(t => t.name); // Get their names
+                localStorage.setItem(localStorageKey, JSON.stringify(watchedNames));
+            } catch (e) {
+                console.error("Failed to save watched status to localStorage:", e);
+                // Optionally inform the user if storage fails (e.g., private browsing mode)
+            }
+        }
+
+        // --- View Control ---
+
+        /**
+         * Makes the tracker section visible, renders the movie list,
+         * and smoothly scrolls the tracker into view.
+         * Uses the `isTrackerVisible` flag to ensure rendering happens only once
+         * when the section becomes visible for the first time.
+         */
+        function showTrackerAndScroll() {
+            const trackerSection = document.getElementById('tracker');
+            if (!trackerSection) {
+                console.error("Tracker section element not found");
+                return;
+            }
+
+            // Only add the visible class and render movies ONCE, the very first time
+            if (!isTrackerVisible) {
+                trackerSection.classList.add('visible'); // Make it visible (starts fade-in)
+                isTrackerVisible = true; // Set flag now
+                renderMovies(); // Render content now that it's visible
+            }
+
+            // ALWAYS scroll into view when this function is called (by button or observer)
+            // Add a slight delay to ensure the display: flex and opacity transition starts
+            setTimeout(() => {
+                trackerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100); // Small delay helps ensure smooth scroll
+        }
+
+
+        // --- Rendering & Event Handling ---
+
+        /**
+         * Renders the list of MCU titles based on current filters, search term, and sort order.
+         * Handles empty states and highlights search terms.
+         * This function is called initially when the tracker becomes visible and on filter/sort/search changes.
+         */
+        function renderMovies() {
+            // Don't render if tracker isn't shown yet or intended to be shown
+            if (!isTrackerVisible) return;
+
+            const list = document.getElementById('movieList');
+             if (!list) {
+                 console.error("Movie list element (#movieList) not found.");
+                 return; // Exit if the target element doesn't exist
+             }
+            const sortVal = document.getElementById('sort').value;
+            const searchTerm = currentSearchTerm.trim().toLowerCase();
+            // Create regex for highlighting only if there's a search term
+            const searchRegex = searchTerm ? new RegExp(escapeRegExp(searchTerm), 'gi') : null; // 'g' for global match, 'i' for case-insensitive
+
+            list.innerHTML = ''; // Clear previous items before rendering new ones
+
+            // 1. Filter by Type
+            let typeFiltered = mcuTitles.filter(m => currentFilter === 'all' || m.type === currentFilter);
+
+            // 2. Filter by Search Term
+            let searchFiltered = searchTerm
+                 ? typeFiltered.filter(m => m.name.toLowerCase().includes(searchTerm))
+                 : typeFiltered;
+
+            // 3. Sort Results
+            let sorted = [...searchFiltered]; // Create a new array to sort
+            if (sortVal === 'release-asc') {
+                sorted.sort((a, b) => parseDate(a.date) - parseDate(b.date));
+            } else if (sortVal === 'release-desc') {
+                sorted.sort((a, b) => parseDate(b.date) - parseDate(a.date));
+            } else if (sortVal === 'name-asc') {
+                sorted.sort((a, b) => a.name.localeCompare(b.name));
+            } else if (sortVal === 'name-desc') {
+                sorted.sort((a, b) => b.name.localeCompare(a.name));
+            }
+
+            // 4. Render Items or Empty Message
+            if (sorted.length === 0) {
+                 list.innerHTML = '<p class="text-center text-gray-500 py-4">No titles match your search or filter.</p>';
+             } else {
+                // Create and append elements for each title
+                sorted.forEach(title => {
+                    const item = document.createElement('div');
+                    item.className = 'movie-item'; // Apply item styles
+
+                    // Info container (title, date, type)
+                    const infoDiv = document.createElement('div');
+                    infoDiv.className = 'movie-item-info';
+
+                    const titleH3 = document.createElement('h3');
+                    // Highlight search term in title if applicable
+                    if (searchRegex) {
+                        // Replace matches with highlighted span
+                        titleH3.innerHTML = title.name.replace(searchRegex, '<span class="highlight">$&</span>');
+                    } else {
+                        titleH3.textContent = title.name;
+                    }
+                    infoDiv.appendChild(titleH3);
+
+                    const dateP = document.createElement('p');
+                    dateP.textContent = title.date; // Display date
+                    infoDiv.appendChild(dateP);
+
+                    const typeP = document.createElement('p');
+                    typeP.textContent = `Type: ${capitalize(title.type)}`; // Display capitalized type
+                    typeP.className = 'type'; // Apply type styles
+                    infoDiv.appendChild(typeP);
+
+                    // Checkbox container
+                    const checkboxDiv = document.createElement('div');
+                    checkboxDiv.className = 'checkbox'; // Apply checkbox container styles
+
+                    const checkboxInput = document.createElement('input');
+                    checkboxInput.type = 'checkbox';
+                    checkboxInput.checked = title.watched; // Set checked state based on data
+                    checkboxInput.setAttribute('aria-label', `Mark ${title.name} as watched`); // Accessibility label
+                    // Add event listener to toggle watched status on change
+                    checkboxInput.onchange = () => toggleWatch(title.name);
+
+                    checkboxDiv.appendChild(checkboxInput); // Add checkbox to its div
+                    item.appendChild(infoDiv); // Add info div to item
+                    item.appendChild(checkboxDiv); // Add checkbox div to item
+                    list.appendChild(item); // Add the complete item to the list
+                });
+             }
+            updateProgress(); // Update progress bar after rendering
+        }
+
+        /**
+         * Handles clicks on filter buttons.
+         * Updates the current filter, styles the active button, and re-renders the list.
+         * @param {string} type - The filter type ('all', 'movie', 'series', 'special').
+         */
+        function filterType(type) {
+             currentFilter = type; // Update global filter state
+             // Update button styles
+             document.querySelectorAll('.filter-buttons button').forEach(btn => btn.classList.remove('active'));
+             const activeButton = document.querySelector(`.filter-buttons button[onclick="filterType('${type}')"]`);
+             if (activeButton) activeButton.classList.add('active');
+             // Re-render the list if the tracker is visible
+             if (isTrackerVisible) renderMovies();
+           }
+
+        /**
+         * Handles input changes in the search bar.
+         * Updates the current search term and re-renders the list.
+         */
+        function handleSearch() {
+             const searchInput = document.getElementById('search');
+             currentSearchTerm = searchInput.value; // Update global search term state
+             // Re-render the list if the tracker is visible
+             if (isTrackerVisible) renderMovies();
+           }
+
+        /**
+         * Handles changes in the sort dropdown.
+         * Re-renders the list based on the new sort order.
+         */
+        function sortItems() {
+             // Re-render the list if the tracker is visible
+             if (isTrackerVisible) renderMovies();
+           }
+
+        /**
+         * Toggles the watched status of a specific title.
+         * Updates the data array, saves the status to localStorage, and updates the progress bar.
+         * @param {string} titleName - The name of the title to toggle.
+         */
+        function toggleWatch(titleName) {
+            const title = mcuTitles.find(t => t.name === titleName);
+            if (title) {
+                title.watched = !title.watched; // Toggle the watched property
+                updateProgress(); // Update the visual progress bar/count
+                saveWatchedStatus(); // Save the new state to localStorage
+            } else {
+                console.error("Could not find title to toggle:", titleName);
+            }
+        }
+
+        /**
+         * Updates the progress bar width and the count text (e.g., "Watched: 10 / 60").
+         * Also updates the ARIA label for accessibility.
+         */
+        function updateProgress() {
+            const watchedCount = mcuTitles.filter(t => t.watched).length;
+            const totalCount = mcuTitles.length;
+            // Calculate percentage, handle division by zero
+            const percent = totalCount > 0 ? (watchedCount / totalCount) * 100 : 0;
+
+            const progressElement = document.getElementById('progress');
+            const progressCountElement = document.getElementById('progressCount');
+
+            // Update progress bar width if element exists
+            if (progressElement) {
+                progressElement.style.width = percent + '%';
+            }
+            // Update count text if element exists
+            if (progressCountElement) {
+                progressCountElement.textContent = `Watched: ${watchedCount} / ${totalCount}`;
+            }
+
+             // Update ARIA label for the progress area for screen readers
+             const progressArea = progressElement?.parentElement?.parentElement; // Get the .progress-area div
+             if (progressArea) {
+                 progressArea.setAttribute('aria-label', `Progress: ${watchedCount} out of ${totalCount} titles watched.`);
+             }
+        }
+
+        // --- INITIALIZATION ---
+        // Runs after the DOM is fully loaded and parsed.
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1. Load saved watched status from localStorage
+            loadWatchedStatus();
+            // 2. Update progress bar/count based on loaded data (even if tracker is hidden)
+            updateProgress();
+
+            // 3. Get references to key elements
+            const startButton = document.getElementById('startTrackingBtn');
+            const trackerSection = document.getElementById('tracker');
+            const landingObserverTarget = document.getElementById('landing-observer-target'); // For scroll trigger
+
+             // Basic check to ensure essential elements are present
+             if (!startButton || !trackerSection || !landingObserverTarget) {
+                 console.error("Initialization failed: Missing essential elements (button, tracker section, or observer target).");
+                 return;
+             }
+
+            // 4. Add click listener to the "Start Tracking" button
+            // This button now always calls showTrackerAndScroll, which handles visibility and scrolling
+            startButton.addEventListener('click', showTrackerAndScroll);
+
+            // 5. Set up Intersection Observer to trigger tracker visibility on scroll
+            const observerOptions = {
+                root: null, // Observe intersections relative to the viewport
+                rootMargin: '0px',
+                threshold: 0 // Trigger as soon as the target leaves the viewport
+            };
+
+            const observerCallback = (entries, observer) => {
+                entries.forEach(entry => {
+                    // If the target element is no longer intersecting the viewport (scrolled past)
+                    // And the tracker hasn't been made visible yet by the button or a previous scroll
+                    if (!entry.isIntersecting && !isTrackerVisible) {
+                         showTrackerAndScroll(); // Show the tracker
+                         // Optional: Stop observing after the first trigger if desired
+                         // observer.unobserve(landingObserverTarget);
+                    }
+                });
+            };
+
+            const observer = new IntersectionObserver(observerCallback, observerOptions);
+            // Start observing the invisible target element at the bottom of the landing section
+            observer.observe(landingObserverTarget);
+
+            // 6. Set initial active filter button ('All') and render the initial list
+            // This will call renderMovies internally if isTrackerVisible is true (which it isn't initially)
+            // The first render happens when showTrackerAndScroll is called by button or observer.
+             filterType('all');
+        });
+
+    </script>
+</body>
+</html>
